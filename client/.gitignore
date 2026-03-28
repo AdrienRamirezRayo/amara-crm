@@ -22,3 +22,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+node_modules/
+client/node_modules/
+.env
+dist/
+client/dist/
+.vercel/
+.DS_Store
