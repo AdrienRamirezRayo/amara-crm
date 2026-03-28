@@ -1,163 +1,111 @@
-import { useMemo, useState } from "react";
-import { motion } from "framer-motion";
-import { CheckCircle2, Clock3, AlertTriangle, Search } from "lucide-react";
+import { useEffect, useState } from "react";
+import {
+  fetchTasks,
+  createTask,
+  updateTask,
+  deleteTask,
+} from "../services/tasks";
 
-function getPriorityClass(priority) {
-  const value = priority.toLowerCase();
+export default function TasksPage({ currentUser }) {
+  const [tasks, setTasks] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [newTask, setNewTask] = useState("");
 
-  if (value === "high") return "priority-high";
-  if (value === "medium") return "priority-medium";
-  if (value === "low") return "priority-low";
-  return "priority-default";
-}
+  useEffect(() => {
+    loadTasks();
+  }, []);
 
-function getStatusClass(status) {
-  return status.toLowerCase() === "completed" ? "status-completed" : "status-open";
-}
+  async function loadTasks() {
+    setLoading(true);
+    const { data, error } = await fetchTasks();
 
-export default function TasksPage({ tasks, currentUser }) {
-  const [taskList, setTaskList] = useState(tasks);
-  const [query, setQuery] = useState("");
+    if (!error && Array.isArray(data)) {
+      setTasks(data);
+    }
 
-  function toggleTask(id) {
-    setTaskList((prev) =>
-      prev.map((task) =>
-        task.id === id
-          ? {
-              ...task,
-              status: task.status === "Completed" ? "Open" : "Completed",
-            }
-          : task
-      )
-    );
+    setLoading(false);
   }
 
-  const filteredTasks = useMemo(() => {
-    return taskList.filter((task) => {
-      const text = `${task.title} ${task.lead} ${task.agent} ${task.due} ${task.priority} ${task.status}`.toLowerCase();
-      return text.includes(query.toLowerCase());
-    });
-  }, [taskList, query]);
+  async function handleAddTask() {
+    if (!newTask.trim()) return;
 
-  const openCount = taskList.filter((task) => task.status === "Open").length;
-  const completedCount = taskList.filter((task) => task.status === "Completed").length;
-  const overdueCount = taskList.filter((task) => task.due === "Overdue").length;
-  const highPriorityCount = taskList.filter((task) => task.priority === "High").length;
+    const { data, error } = await createTask({
+      title: newTask,
+      owner_id: currentUser?.id,
+    });
+
+    if (!error && data) {
+      setTasks((prev) => [data, ...prev]);
+      setNewTask("");
+    }
+  }
+
+  async function handleToggle(task) {
+    const newStatus = task.status === "Done" ? "Open" : "Done";
+
+    const { data, error } = await updateTask(task.id, {
+      status: newStatus,
+    });
+
+    if (!error && data) {
+      setTasks((prev) =>
+        prev.map((t) => (t.id === task.id ? data : t))
+      );
+    }
+  }
+
+  async function handleDelete(id) {
+    await deleteTask(id);
+    setTasks((prev) => prev.filter((t) => t.id !== id));
+  }
+
+  if (loading) return <div>Loading tasks...</div>;
 
   return (
     <div>
-      <div className="search-bar glass-card">
-        <Search size={18} color="#8dffe5" />
+      <h2 style={{ marginBottom: 20 }}>Tasks</h2>
+
+      <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
         <input
-          type="text"
-          placeholder="Search task center..."
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          value={newTask}
+          onChange={(e) => setNewTask(e.target.value)}
+          placeholder="New task..."
         />
+        <button onClick={handleAddTask}>Add</button>
       </div>
 
-      <div className="grid-cards" style={{ marginBottom: "18px" }}>
-        <div className="glass-card">
-          <div className="card-pad">
-            <div className="stat-row">
-              <div>
-                <div className="stat-label">Open Tasks</div>
-                <div className="stat-value">{openCount}</div>
-              </div>
-              <div className="stat-icon">
-                <Clock3 size={22} />
-              </div>
-            </div>
-            <div className="stat-change">
-              {currentUser?.role} task workload
-            </div>
-          </div>
-        </div>
-
-        <div className="glass-card">
-          <div className="card-pad">
-            <div className="stat-row">
-              <div>
-                <div className="stat-label">Completed</div>
-                <div className="stat-value">{completedCount}</div>
-              </div>
-              <div className="stat-icon">
-                <CheckCircle2 size={22} />
-              </div>
-            </div>
-            <div className="stat-change">Finished tasks tracked</div>
-          </div>
-        </div>
-
-        <div className="glass-card">
-          <div className="card-pad">
-            <div className="stat-row">
-              <div>
-                <div className="stat-label">Overdue</div>
-                <div className="stat-value">{overdueCount}</div>
-              </div>
-              <div className="stat-icon">
-                <AlertTriangle size={22} />
-              </div>
-            </div>
-            <div className="stat-change">Needs attention now</div>
-          </div>
-        </div>
-
-        <div className="glass-card">
-          <div className="card-pad">
-            <div className="stat-row">
-              <div>
-                <div className="stat-label">High Priority</div>
-                <div className="stat-value">{highPriorityCount}</div>
-              </div>
-              <div className="stat-icon">
-                <AlertTriangle size={22} />
-              </div>
-            </div>
-            <div className="stat-change">Focus list for this role</div>
-          </div>
-        </div>
-      </div>
-
-      <div className="leaderboard-list">
-        {filteredTasks.map((task, index) => (
-          <motion.div
+      <div style={{ display: "grid", gap: 10 }}>
+        {tasks.map((task) => (
+          <div
             key={task.id}
-            className="glass-card"
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.28, delay: index * 0.05 }}
+            style={{
+              padding: 12,
+              borderRadius: 10,
+              background: "rgba(255,255,255,0.08)",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
           >
-            <div className="card-pad">
-              <div className="task-row">
-                <div>
-                  <div className="carrier-name">{task.title}</div>
-                  <div className="carrier-meta">
-                    Lead: {task.lead} • Agent: {task.agent}
-                  </div>
-                </div>
+            <span
+              style={{
+                textDecoration:
+                  task.status === "Done" ? "line-through" : "none",
+              }}
+            >
+              {task.title}
+            </span>
 
-                <div className="task-badges">
-                  <span className={`tag ${getPriorityClass(task.priority)}`}>
-                    {task.priority}
-                  </span>
-                  <span className={`tag ${getStatusClass(task.status)}`}>
-                    {task.status}
-                  </span>
-                  <span className="tag">{task.due}</span>
-                </div>
-              </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => handleToggle(task)}>
+                {task.status === "Done" ? "Undo" : "Done"}
+              </button>
 
-              <div className="carrier-card-actions" style={{ marginTop: 16 }}>
-                <button className="small-btn" onClick={() => toggleTask(task.id)}>
-                  {task.status === "Completed" ? "Mark Open" : "Mark Complete"}
-                </button>
-                <button className="small-btn">Open Lead</button>
-                <button className="small-btn">Add Note</button>
-              </div>
+              <button onClick={() => handleDelete(task.id)}>
+                Delete
+              </button>
             </div>
-          </motion.div>
+          </div>
         ))}
       </div>
     </div>

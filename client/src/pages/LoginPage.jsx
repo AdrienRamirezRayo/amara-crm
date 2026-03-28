@@ -1,117 +1,137 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Lock, Mail, ShieldCheck, UserCog } from "lucide-react";
+import { motion } from "framer-motion";
+import { LockKeyhole, Mail, ShieldCheck } from "lucide-react";
+import { signInWithEmail } from "../services/auth";
 
 export default function LoginPage({ onLogin }) {
-  const navigate = useNavigate();
-  const [form, setForm] = useState({
-    email: "",
-    password: "",
-    role: "Admin",
-  });
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [errorText, setErrorText] = useState("");
 
-  function handleChange(e) {
-    setForm({ ...form, [e.target.name]: e.target.value });
-  }
-
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
+    setLoading(true);
+    setErrorText("");
 
-    const roleName =
-      form.role === "Admin"
-        ? "Adrien"
-        : form.role === "Manager"
-        ? "Jasmine"
-        : "Malik";
+    try {
+      const { data, error } = await signInWithEmail(email, password);
 
-    onLogin({
-      name: roleName,
-      email: form.email || `${roleName.toLowerCase()}@amara.crm`,
-      role: form.role,
-    });
+      if (error) {
+        setErrorText(error.message || "Login failed.");
+        setLoading(false);
+        return;
+      }
 
-    navigate("/");
+      const user = data?.user;
+
+      if (!user) {
+        setErrorText("No user returned from Supabase.");
+        setLoading(false);
+        return;
+      }
+
+      const role =
+        user.user_metadata?.role ||
+        user.app_metadata?.role ||
+        "Agent";
+
+      const fullName =
+        user.user_metadata?.full_name ||
+        user.email?.split("@")[0] ||
+        "User";
+
+      onLogin({
+        id: user.id,
+        name: fullName,
+        email: user.email,
+        role,
+      });
+    } catch (err) {
+      setErrorText(err.message || "Unexpected login error.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
-    <div className="auth-shell">
-      <div className="auth-card glass-card">
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "grid",
+        placeItems: "center",
+        padding: 24,
+      }}
+    >
+      <motion.div
+        className="glass-card"
+        initial={{ opacity: 0, y: 18 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35 }}
+        style={{ width: "100%", maxWidth: 460 }}
+      >
         <div className="card-pad">
-          <div className="auth-header">
-            <div className="brand-title">AMARA CRM</div>
-            <div className="brand-subtitle">Neural Sales Operating System</div>
+          <div style={{ display: "grid", gap: 10, marginBottom: 18 }}>
+            <div className="glow-pill" style={{ width: "fit-content" }}>
+              <ShieldCheck size={16} />
+              Secure Login
+            </div>
+
+            <h1 className="page-title" style={{ margin: 0 }}>
+              AMARA CRM
+            </h1>
+
+            <p className="page-subtitle" style={{ margin: 0 }}>
+              Sign in to access your live CRM workspace.
+            </p>
           </div>
 
-          <div className="section-spacing">
-            <div className="panel-title">Role Login</div>
-            <div className="pipeline-meta">
-              Enter as Admin, Manager, or Agent to test role-based access.
-            </div>
-          </div>
-
-          <form className="auth-form" onSubmit={handleSubmit}>
-            <div className="auth-input">
-              <Mail size={16} />
-              <input
-                name="email"
-                type="email"
-                placeholder="Email"
-                value={form.email}
-                onChange={handleChange}
-                required
-              />
+          <form onSubmit={handleSubmit} style={{ display: "grid", gap: 14 }}>
+            <div className="drawer-info-card">
+              <div className="coach-label">Email</div>
+              <div className="search-bar">
+                <Mail size={16} />
+                <input
+                  type="email"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </div>
             </div>
 
-            <div className="auth-input">
-              <Lock size={16} />
-              <input
-                name="password"
-                type="password"
-                placeholder="Password"
-                value={form.password}
-                onChange={handleChange}
-                required
-              />
+            <div className="drawer-info-card">
+              <div className="coach-label">Password</div>
+              <div className="search-bar">
+                <LockKeyhole size={16} />
+                <input
+                  type="password"
+                  placeholder="Enter password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+              </div>
             </div>
 
-            <div className="auth-input">
-              <UserCog size={16} />
-              <select
-                name="role"
-                value={form.role}
-                onChange={handleChange}
-                style={{
-                  flex: 1,
-                  background: "transparent",
-                  border: "none",
-                  outline: "none",
-                  color: "#eafcff",
-                }}
-              >
-                <option value="Admin" style={{ color: "black" }}>Admin</option>
-                <option value="Manager" style={{ color: "black" }}>Manager</option>
-                <option value="Agent" style={{ color: "black" }}>Agent</option>
-              </select>
-            </div>
+            {errorText ? (
+              <div className="note-card">
+                <div className="carrier-meta">{errorText}</div>
+              </div>
+            ) : null}
 
-            <button type="submit" className="primary-btn auth-btn">
-              Enter AMARA
+            <button
+              className="primary-btn"
+              type="submit"
+              disabled={loading}
+              style={{ width: "100%", justifyContent: "center" }}
+            >
+              {loading ? "Signing in..." : "Sign In"}
             </button>
           </form>
-
-          <div className="section-spacing">
-            <div className="coach-card">
-              <div className="coach-label" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <ShieldCheck size={15} />
-                Role Access
-              </div>
-              <div className="carrier-meta">
-                Admin sees everything. Manager sees team and reporting tools. Agent sees the sales workspace.
-              </div>
-            </div>
-          </div>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }
