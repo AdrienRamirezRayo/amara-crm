@@ -105,7 +105,7 @@ function estimateTalkRatio(lines) {
 export default function SalesCoachPage() {
   const recognitionRef = useRef(null);
   const streamRef = useRef(null);
-
+const API_URL = import.meta.env.VITE_API_URL || "";
   const [supported, setSupported] = useState(true);
   const [micReady, setMicReady] = useState(false);
   const [listening, setListening] = useState(false);
@@ -208,7 +208,9 @@ export default function SalesCoachPage() {
       setIsTranslating(true);
 
       try {
-        const response = await fetch("/api/translate", {
+        const API_URL = import.meta.env.VITE_API_URL || "";
+
+const response = await fetch(`${API_URL}/api/translate`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

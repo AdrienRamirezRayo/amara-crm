@@ -1,3 +1,6 @@
+app.get("/", (req, res) => {
+  res.send("AMARA CRM backend is live");
+});
 import express from "express";
 import cors from "cors";
 
