@@ -27,7 +27,7 @@ import AuditCenterPage from "./pages/AuditCenterPage";
 import ReportsPage from "./pages/ReportsPage";
 import IntegrationsPage from "./pages/IntegrationsPage";
 import SettingsPage from "./pages/SettingsPage";
-
+import { createLeadActivity } from "./services/activity";
 import {
   getCurrentSession,
   getCurrentUser,
@@ -269,6 +269,12 @@ export default function App() {
       console.error("createLead error:", error);
       return;
     }
+    await createLeadActivity({
+  lead_id: data.id,
+  owner_id: currentUser.id,
+  action: "Lead Created",
+  detail: `${data.name} was added to the CRM.`,
+});
 
     if (data) {
       setLeads((prev) => [mapDbLeadToUi(data), ...prev]);
@@ -283,6 +289,16 @@ export default function App() {
       console.error("deleteLead error:", error);
       return;
     }
+    const leadToDelete = leads.find((lead) => lead.id === id);
+
+if (leadToDelete && currentUser?.id) {
+  await createLeadActivity({
+    lead_id: id,
+    owner_id: currentUser.id,
+    action: "Lead Deleted",
+    detail: `${leadToDelete.name} was removed from the CRM.`,
+  });
+}
 
     setLeads((prev) => prev.filter((lead) => lead.id !== id));
     setSelectedLead(null);
@@ -297,6 +313,12 @@ export default function App() {
       console.error("updateLead stage error:", error);
       return;
     }
+    await createLeadActivity({
+  lead_id: data.id,
+  owner_id: currentUser.id,
+  action: "Stage Changed",
+  detail: `${data.name} moved to ${newStage}.`,
+});
 
     if (data) {
       const mapped = mapDbLeadToUi(data);
@@ -324,6 +346,12 @@ export default function App() {
       console.error("updateLead notes error:", error);
       return;
     }
+    await createLeadActivity({
+  lead_id: data.id,
+  owner_id: currentUser.id,
+  action: "Note Added",
+  detail: `A new note was added for ${data.name}.`,
+});
 
     if (data) {
       const mapped = mapDbLeadToUi(data);
@@ -356,6 +384,12 @@ export default function App() {
       console.error("saveLead error:", error);
       return;
     }
+    await createLeadActivity({
+  lead_id: data.id,
+  owner_id: currentUser.id,
+  action: "Lead Updated",
+  detail: `${data.name}'s record was updated.`,
+});
 
     if (data) {
       const mapped = mapDbLeadToUi(data);
