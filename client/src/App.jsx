@@ -27,10 +27,10 @@ import AuditCenterPage from "./pages/AuditCenterPage";
 import ReportsPage from "./pages/ReportsPage";
 import IntegrationsPage from "./pages/IntegrationsPage";
 import SettingsPage from "./pages/SettingsPage";
+
 import { createLeadActivity } from "./services/activity";
 import {
   getCurrentSession,
-  getCurrentUser,
   signOutUser,
 } from "./services/auth";
 import {
@@ -39,12 +39,8 @@ import {
   updateLead,
   deleteLead,
 } from "./services/leads";
-import {
-  fetchTasks,
-  createTask,
-  updateTask,
-  deleteTask,
-} from "./services/tasks";
+import { fetchTasks } from "./services/tasks";
+import { fetchMyProfile, upsertProfile } from "./services/profiles";
 import { supabase } from "./lib/supabase";
 import { initialLeads, tasks as initialTasks } from "./data/crmData";
 
@@ -73,6 +69,7 @@ function mapDbLeadToUi(lead) {
     followUp: lead.follow_up || "",
     notes: Array.isArray(lead.notes) ? lead.notes : [],
     agent: "Assigned User",
+    ownerId: lead.owner_id || null,
   };
 }
 
@@ -100,6 +97,7 @@ function mapDbTaskToUi(task) {
     priority: task.priority || "Medium",
     dueDate: task.due_date || "",
     agent: "Assigned User",
+    ownerId: task.owner_id || null,
   };
 }
 
@@ -159,6 +157,86 @@ export default function App() {
   const [isBooting, setIsBooting] = useState(true);
 
   useEffect(() => {
+    async function loadUserAndData(user) {
+      try {
+        const { data: profileData, error: profileError } = await fetchMyProfile(
+          user.id
+        );
+
+        let profile = profileData;
+
+        if (profileError && profileError.code !== "PGRST116") {
+          console.error("fetchMyProfile error:", profileError);
+        }
+
+        if (!profile) {
+          const { data: createdProfile, error: createProfileError } =
+            await upsertProfile({
+              id: user.id,
+              email: user.email,
+              full_name:
+                user.user_metadata?.full_name ||
+                user.email?.split("@")[0] ||
+                "User",
+              role: user.user_metadata?.role || "Agent",
+            });
+
+          if (createProfileError) {
+            console.error("upsertProfile error:", createProfileError);
+          }
+
+          profile = createdProfile;
+        }
+
+        setCurrentUser({
+          id: user.id,
+          name: profile?.full_name || user.email?.split("@")[0] || "User",
+          email: user.email,
+          role: profile?.role || "Agent",
+          managerId: profile?.manager_id || null,
+        });
+
+        setIsAuthenticated(true);
+
+        const [
+          { data: dbLeads, error: leadsError },
+          { data: dbTasks, error: tasksError },
+        ] = await Promise.all([fetchLeads(), fetchTasks()]);
+
+        if (leadsError) {
+          console.error("fetchLeads error:", leadsError);
+        }
+
+        if (tasksError) {
+          console.error("fetchTasks error:", tasksError);
+        }
+
+        if (Array.isArray(dbLeads)) {
+          setLeads(dbLeads.map(mapDbLeadToUi));
+        } else {
+          setLeads([]);
+        }
+
+        if (Array.isArray(dbTasks)) {
+          setTaskList(dbTasks.map(mapDbTaskToUi));
+        } else {
+          setTaskList([]);
+        }
+      } catch (error) {
+        console.error("loadUserAndData error:", error);
+
+        setCurrentUser({
+          id: user.id,
+          name: user.email?.split("@")[0] || "User",
+          email: user.email,
+          role: "Agent",
+          managerId: null,
+        });
+
+        setIsAuthenticated(true);
+      }
+    }
+
     async function boot() {
       try {
         const { data: sessionData } = await getCurrentSession();
@@ -171,47 +249,12 @@ export default function App() {
           return;
         }
 
-        const { data: userData } = await getCurrentUser();
-        const user = userData?.user;
-
-        if (!user) {
-          setIsAuthenticated(false);
-          setCurrentUser(null);
-          setIsBooting(false);
-          return;
-        }
-
-        const role =
-          user.user_metadata?.role ||
-          user.app_metadata?.role ||
-          "Agent";
-
-        const name =
-          user.user_metadata?.full_name ||
-          user.email?.split("@")[0] ||
-          "User";
-
-        setCurrentUser({
-          id: user.id,
-          name,
-          email: user.email,
-          role,
-        });
-
-        setIsAuthenticated(true);
-
-        const [{ data: dbLeads }, { data: dbTasks }] = await Promise.all([
-          fetchLeads(),
-          fetchTasks(),
-        ]);
-
-        if (Array.isArray(dbLeads)) {
-          setLeads(dbLeads.map(mapDbLeadToUi));
-        }
-
-        if (Array.isArray(dbTasks)) {
-          setTaskList(dbTasks.map(mapDbTaskToUi));
-        }
+        const user = session.user;
+        await loadUserAndData(user);
+      } catch (error) {
+        console.error("boot error:", error);
+        setIsAuthenticated(false);
+        setCurrentUser(null);
       } finally {
         setIsBooting(false);
       }
@@ -224,29 +267,15 @@ export default function App() {
         if (!session) {
           setIsAuthenticated(false);
           setCurrentUser(null);
+          setLeads([]);
+          setTaskList([]);
+          setIsBooting(false);
           return;
         }
 
-        const user = session.user;
-
-        const role =
-          user.user_metadata?.role ||
-          user.app_metadata?.role ||
-          "Agent";
-
-        const name =
-          user.user_metadata?.full_name ||
-          user.email?.split("@")[0] ||
-          "User";
-
-        setCurrentUser({
-          id: user.id,
-          name,
-          email: user.email,
-          role,
-        });
-
-        setIsAuthenticated(true);
+        setIsBooting(true);
+        await loadUserAndData(session.user);
+        setIsBooting(false);
       }
     );
 
@@ -269,36 +298,38 @@ export default function App() {
       console.error("createLead error:", error);
       return;
     }
-    await createLeadActivity({
-  lead_id: data.id,
-  owner_id: currentUser.id,
-  action: "Lead Created",
-  detail: `${data.name} was added to the CRM.`,
-});
 
     if (data) {
+      await createLeadActivity({
+        lead_id: data.id,
+        owner_id: currentUser.id,
+        action: "Lead Created",
+        detail: `${data.name} was added to the CRM.`,
+      });
+
       setLeads((prev) => [mapDbLeadToUi(data), ...prev]);
       rewardBones(10);
     }
   }
 
   async function handleDeleteLead(id) {
+    const leadToDelete = leads.find((lead) => lead.id === id);
+
+    if (leadToDelete && currentUser?.id) {
+      await createLeadActivity({
+        lead_id: id,
+        owner_id: currentUser.id,
+        action: "Lead Deleted",
+        detail: `${leadToDelete.name} was removed from the CRM.`,
+      });
+    }
+
     const { error } = await deleteLead(id);
 
     if (error) {
       console.error("deleteLead error:", error);
       return;
     }
-    const leadToDelete = leads.find((lead) => lead.id === id);
-
-if (leadToDelete && currentUser?.id) {
-  await createLeadActivity({
-    lead_id: id,
-    owner_id: currentUser.id,
-    action: "Lead Deleted",
-    detail: `${leadToDelete.name} was removed from the CRM.`,
-  });
-}
 
     setLeads((prev) => prev.filter((lead) => lead.id !== id));
     setSelectedLead(null);
@@ -313,14 +344,15 @@ if (leadToDelete && currentUser?.id) {
       console.error("updateLead stage error:", error);
       return;
     }
-    await createLeadActivity({
-  lead_id: data.id,
-  owner_id: currentUser.id,
-  action: "Stage Changed",
-  detail: `${data.name} moved to ${newStage}.`,
-});
 
     if (data) {
+      await createLeadActivity({
+        lead_id: data.id,
+        owner_id: currentUser.id,
+        action: "Stage Changed",
+        detail: `${data.name} moved to ${newStage}.`,
+      });
+
       const mapped = mapDbLeadToUi(data);
 
       setLeads((prev) =>
@@ -346,14 +378,15 @@ if (leadToDelete && currentUser?.id) {
       console.error("updateLead notes error:", error);
       return;
     }
-    await createLeadActivity({
-  lead_id: data.id,
-  owner_id: currentUser.id,
-  action: "Note Added",
-  detail: `A new note was added for ${data.name}.`,
-});
 
     if (data) {
+      await createLeadActivity({
+        lead_id: data.id,
+        owner_id: currentUser.id,
+        action: "Note Added",
+        detail: `A new note was added for ${data.name}.`,
+      });
+
       const mapped = mapDbLeadToUi(data);
 
       setLeads((prev) =>
@@ -384,14 +417,15 @@ if (leadToDelete && currentUser?.id) {
       console.error("saveLead error:", error);
       return;
     }
-    await createLeadActivity({
-  lead_id: data.id,
-  owner_id: currentUser.id,
-  action: "Lead Updated",
-  detail: `${data.name}'s record was updated.`,
-});
 
     if (data) {
+      await createLeadActivity({
+        lead_id: data.id,
+        owner_id: currentUser.id,
+        action: "Lead Updated",
+        detail: `${data.name}'s record was updated.`,
+      });
+
       const mapped = mapDbLeadToUi(data);
 
       setLeads((prev) =>
@@ -401,11 +435,6 @@ if (leadToDelete && currentUser?.id) {
       setSelectedLead(mapped);
       rewardBones(5);
     }
-  }
-
-  function handleLogin(user) {
-    setCurrentUser(user);
-    setIsAuthenticated(true);
   }
 
   async function handleLogout() {
@@ -422,13 +451,13 @@ if (leadToDelete && currentUser?.id) {
   const visibleLeads = useMemo(() => {
     if (currentUser?.role === "Admin") return leads;
     if (currentUser?.role === "Manager") return leads;
-    return leads;
+    return leads.filter((lead) => lead.ownerId === currentUser?.id);
   }, [leads, currentUser]);
 
   const visibleTasks = useMemo(() => {
     if (currentUser?.role === "Admin") return taskList;
     if (currentUser?.role === "Manager") return taskList;
-    return taskList;
+    return taskList.filter((task) => task.ownerId === currentUser?.id);
   }, [taskList, currentUser]);
 
   const performanceStats = useMemo(() => {
@@ -452,7 +481,7 @@ if (leadToDelete && currentUser?.id) {
 
   return (
     <Routes>
-      <Route path="/login" element={<LoginPage onLogin={handleLogin} />} />
+      <Route path="/login" element={<LoginPage />} />
 
       <Route
         element={
@@ -485,7 +514,13 @@ if (leadToDelete && currentUser?.id) {
         <Route path="/" element={<DashboardPage leads={visibleLeads} />} />
         <Route
           path="/onboarding"
-          element={canAccess(["Admin"]) ? <OnboardingPage /> : <Navigate to="/" replace />}
+          element={
+            canAccess(["Admin"]) ? (
+              <OnboardingPage />
+            ) : (
+              <Navigate to="/" replace />
+            )
+          }
         />
         <Route
           path="/team-invite"
@@ -499,14 +534,24 @@ if (leadToDelete && currentUser?.id) {
         />
         <Route
           path="/leads"
-          element={<LeadsPage leads={visibleLeads} onOpenLead={setSelectedLead} />}
+          element={
+            <LeadsPage leads={visibleLeads} onOpenLead={setSelectedLead} />
+          }
         />
         <Route path="/leads/:id" element={<LeadDetailPage />} />
         <Route path="/audit-center" element={<AuditCenterPage />} />
-        <Route path="/recruiting" element={<RecruitingPage currentUser={currentUser} />} />
+        <Route
+          path="/recruiting"
+          element={<RecruitingPage currentUser={currentUser} />}
+        />
         <Route
           path="/pipeline"
-          element={<PipelinePage leads={visibleLeads} onStageChange={handleStageChange} />}
+          element={
+            <PipelinePage
+              leads={visibleLeads}
+              onStageChange={handleStageChange}
+            />
+          }
         />
         <Route path="/carriers" element={<CarriersPage />} />
         <Route path="/appointments" element={<AppointmentsPage />} />
@@ -538,36 +583,71 @@ if (leadToDelete && currentUser?.id) {
         />
         <Route
           path="/agents"
-          element={canAccess(["Admin", "Manager"]) ? <AgentsPage /> : <Navigate to="/" replace />}
+          element={
+            canAccess(["Admin", "Manager"]) ? (
+              <AgentsPage />
+            ) : (
+              <Navigate to="/" replace />
+            )
+          }
         />
         <Route
           path="/agents/:id"
           element={
-            canAccess(["Admin", "Manager"]) ? <AgentDetailPage /> : <Navigate to="/" replace />
+            canAccess(["Admin", "Manager"]) ? (
+              <AgentDetailPage />
+            ) : (
+              <Navigate to="/" replace />
+            )
           }
         />
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route
           path="/audit"
-          element={canAccess(["Admin"]) ? <AuditCenterPage /> : <Navigate to="/" replace />}
+          element={
+            canAccess(["Admin"]) ? (
+              <AuditCenterPage />
+            ) : (
+              <Navigate to="/" replace />
+            )
+          }
         />
         <Route
           path="/reports"
           element={
-            canAccess(["Admin", "Manager"]) ? <ReportsPage /> : <Navigate to="/" replace />
+            canAccess(["Admin", "Manager"]) ? (
+              <ReportsPage />
+            ) : (
+              <Navigate to="/" replace />
+            )
           }
         />
         <Route
           path="/integrations"
-          element={canAccess(["Admin"]) ? <IntegrationsPage /> : <Navigate to="/" replace />}
+          element={
+            canAccess(["Admin"]) ? (
+              <IntegrationsPage />
+            ) : (
+              <Navigate to="/" replace />
+            )
+          }
         />
         <Route
           path="/settings"
-          element={canAccess(["Admin"]) ? <SettingsPage /> : <Navigate to="/" replace />}
+          element={
+            canAccess(["Admin"]) ? (
+              <SettingsPage />
+            ) : (
+              <Navigate to="/" replace />
+            )
+          }
         />
       </Route>
 
-      <Route path="*" element={<Navigate to={isAuthenticated ? "/" : "/login"} replace />} />
+      <Route
+        path="*"
+        element={<Navigate to={isAuthenticated ? "/" : "/login"} replace />}
+      />
     </Routes>
   );
 }

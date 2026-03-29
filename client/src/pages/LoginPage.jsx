@@ -1,9 +1,12 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { LockKeyhole, Mail, ShieldCheck } from "lucide-react";
 import { signInWithEmail } from "../services/auth";
 
-export default function LoginPage({ onLogin }) {
+export default function LoginPage() {
+  const navigate = useNavigate();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -15,7 +18,7 @@ export default function LoginPage({ onLogin }) {
     setErrorText("");
 
     try {
-      const { data, error } = await signInWithEmail(email, password);
+      const { error } = await signInWithEmail(email, password);
 
       if (error) {
         setErrorText(error.message || "Login failed.");
@@ -23,30 +26,7 @@ export default function LoginPage({ onLogin }) {
         return;
       }
 
-      const user = data?.user;
-
-      if (!user) {
-        setErrorText("No user returned from Supabase.");
-        setLoading(false);
-        return;
-      }
-
-      const role =
-        user.user_metadata?.role ||
-        user.app_metadata?.role ||
-        "Agent";
-
-      const fullName =
-        user.user_metadata?.full_name ||
-        user.email?.split("@")[0] ||
-        "User";
-
-      onLogin({
-        id: user.id,
-        name: fullName,
-        email: user.email,
-        role,
-      });
+      navigate("/");
     } catch (err) {
       setErrorText(err.message || "Unexpected login error.");
     } finally {
