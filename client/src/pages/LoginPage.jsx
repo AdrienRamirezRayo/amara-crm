@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { LockKeyhole, Mail, ShieldCheck, UserPlus, LogIn } from "lucide-react";
 import { supabase } from "../lib/supabase";
-import { signInWithEmail } from "../services/auth";
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -22,28 +21,40 @@ export default function LoginPage() {
     setErrorText("");
     setSuccessText("");
 
+    const timeout = setTimeout(() => {
+      setLoading(false);
+      setErrorText("Sign-in timed out. Try again, then hard refresh the page.");
+    }, 12000);
+
     try {
       if (mode === "signin") {
-        const { data, error } = await signInWithEmail(email, password);
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        });
 
+        clearTimeout(timeout);
         console.log("SIGN IN RESULT:", { data, error });
 
         if (error) {
           setErrorText(error.message || "Login failed.");
+          setLoading(false);
           return;
         }
 
         if (!data?.session) {
-          setErrorText("No session was created. Check your email and password.");
+          setErrorText("No session returned. Check the email/password and make sure the user is confirmed.");
+          setLoading(false);
           return;
         }
 
-        navigate("/");
+        setLoading(false);
+        navigate("/", { replace: true });
         return;
       }
 
       const { data, error } = await supabase.auth.signUp({
-        email,
+        email: email.trim(),
         password,
         options: {
           data: {
@@ -52,10 +63,12 @@ export default function LoginPage() {
         },
       });
 
+      clearTimeout(timeout);
       console.log("SIGN UP RESULT:", { data, error });
 
       if (error) {
         setErrorText(error.message || "Signup failed.");
+        setLoading(false);
         return;
       }
 
@@ -66,7 +79,7 @@ export default function LoginPage() {
           .from("profiles")
           .upsert({
             id: user.id,
-            email,
+            email: email.trim(),
             full_name: fullName || email.split("@")[0],
             role: "agent",
           });
@@ -81,10 +94,11 @@ export default function LoginPage() {
       );
       setMode("signin");
       setPassword("");
+      setLoading(false);
     } catch (err) {
+      clearTimeout(timeout);
       console.error("AUTH ERROR:", err);
       setErrorText(err.message || "Unexpected auth error.");
-    } finally {
       setLoading(false);
     }
   }
@@ -134,10 +148,20 @@ export default function LoginPage() {
               }}
               style={{
                 flex: 1,
-                border: mode === "signin" ? "1px solid rgba(255,255,255,0.25)" : undefined,
+                border:
+                  mode === "signin"
+                    ? "1px solid rgba(255,255,255,0.25)"
+                    : undefined,
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "center" }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  justifyContent: "center",
+                }}
+              >
                 <LogIn size={15} />
                 Sign In
               </div>
@@ -153,10 +177,20 @@ export default function LoginPage() {
               }}
               style={{
                 flex: 1,
-                border: mode === "signup" ? "1px solid rgba(255,255,255,0.25)" : undefined,
+                border:
+                  mode === "signup"
+                    ? "1px solid rgba(255,255,255,0.25)"
+                    : undefined,
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "center" }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  justifyContent: "center",
+                }}
+              >
                 <UserPlus size={15} />
                 Create Account
               </div>
@@ -200,7 +234,9 @@ export default function LoginPage() {
                 <LockKeyhole size={16} />
                 <input
                   type="password"
-                  placeholder={mode === "signin" ? "Enter password" : "Create password"}
+                  placeholder={
+                    mode === "signin" ? "Enter password" : "Create password"
+                  }
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required

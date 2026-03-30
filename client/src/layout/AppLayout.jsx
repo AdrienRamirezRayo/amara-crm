@@ -47,11 +47,11 @@ export default function AppLayout({
   const role = (currentUser?.role || "agent").toLowerCase();
 
   const roleLabel =
-    role === "agent"
-      ? "agent"
-      : role === "agent"
-      ? "agent"
-      : "agent";
+  role === "admin"
+    ? "Admin"
+    : role === "manager"
+    ? "Manager"
+    : "Agent";
 
   const pageTitles = {
     "/": {
