@@ -239,42 +239,42 @@ export default function App() {
     }
 
     async function boot() {
-  try {
-    const {
-      data: { session },
-      error,
-    } = await supabase.auth.getSession();
+      try {
+        const {
+          data: { session },
+          error,
+        } = await supabase.auth.getSession();
 
-    if (error) {
-      console.error("getSession error:", error);
+        if (error) {
+          console.error("getSession error:", error);
+        }
+
+        if (!isMounted) return;
+
+        if (!session) {
+          setIsAuthenticated(false);
+          setCurrentUser(null);
+          setLeads([]);
+          setTaskList([]);
+          setIsBooting(false);
+          return;
+        }
+
+        console.log("SIGN IN SUCCESS, SESSION CREATED", session.user);
+
+        await loadUserAndData(session.user);
+      } catch (error) {
+        console.error("boot error:", error);
+
+        if (!isMounted) return;
+
+        setIsAuthenticated(false);
+        setCurrentUser(null);
+        setLeads([]);
+        setTaskList([]);
+        setIsBooting(false);
+      }
     }
-
-    if (!isMounted) return;
-
-    if (!session) {
-      setIsAuthenticated(false);
-      setCurrentUser(null);
-      setLeads([]);
-      setTaskList([]);
-      setIsBooting(false);
-      return;
-    }
-
-    console.log("SIGN IN SUCCESS, SESSION CREATED", session.user); // 👈 ADD THIS
-
-    await loadUserAndData(session.user);
-  } catch (error) {
-    console.error("boot error:", error);
-
-    if (!isMounted) return;
-
-    setIsAuthenticated(false);
-    setCurrentUser(null);
-    setLeads([]);
-    setTaskList([]);
-    setIsBooting(false);
-  }
-}
 
     const timeoutId = setTimeout(() => {
       if (!isMounted) return;
