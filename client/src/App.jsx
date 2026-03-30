@@ -37,7 +37,6 @@ import {
   deleteLead,
 } from "./services/leads";
 import { fetchTasks } from "./services/tasks";
-import { createProfile } from "./services/profiles";
 import { supabase } from "./lib/supabase";
 import { initialLeads, tasks as initialTasks } from "./data/crmData";
 
@@ -199,45 +198,45 @@ export default function App() {
       }
     }
 
-   async function loadUserAndData(user) {
-  try {
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("id, email, full_name, role, manager_id")
-      .eq("id", user.id)
-      .single();
+    async function loadUserAndData(user) {
+      try {
+        const { data: profile, error: profileError } = await supabase
+          .from("profiles")
+          .select("id, email, full_name, role, manager_id")
+          .eq("id", user.id)
+          .single();
 
-    if (profileError) {
-      console.error("profile read error:", profileError);
-      throw profileError;
+        if (profileError) {
+          console.error("profile read error:", profileError);
+          throw profileError;
+        }
+
+        if (!isMounted) return;
+
+        setCurrentUser({
+          id: user.id,
+          name: profile?.full_name || user.email?.split("@")[0] || "User",
+          email: user.email,
+          role: String(profile?.role || "").toLowerCase(),
+          managerId: profile?.manager_id || null,
+        });
+
+        setIsAuthenticated(true);
+        setIsBooting(false);
+
+        loadAppData();
+      } catch (error) {
+        console.error("loadUserAndData error:", error);
+
+        if (!isMounted) return;
+
+        setIsAuthenticated(false);
+        setCurrentUser(null);
+        setLeads([]);
+        setTaskList([]);
+        setIsBooting(false);
+      }
     }
-
-    if (!isMounted) return;
-
-    setCurrentUser({
-      id: user.id,
-      name: profile?.full_name || user.email?.split("@")[0] || "User",
-      email: user.email,
-      role: String(profile?.role || "").toLowerCase(),
-      managerId: profile?.manager_id || null,
-    });
-
-    setIsAuthenticated(true);
-    setIsBooting(false);
-
-    loadAppData();
-  } catch (error) {
-    console.error("loadUserAndData error:", error);
-
-    if (!isMounted) return;
-
-    setIsAuthenticated(false);
-    setCurrentUser(null);
-    setLeads([]);
-    setTaskList([]);
-    setIsBooting(false);
-  }
-}
 
     async function boot() {
       try {
@@ -545,15 +544,15 @@ export default function App() {
           }
         />
         <Route
-  path="/team-invite"
-  element={
-    canAccess(["admin", "manager"]) ? (
-      <TeamInvitePage />
-    ) : (
-      <Navigate to="/" replace />
-    )
-  }
-/>
+          path="/team-invite"
+          element={
+            canAccess(["admin", "manager"]) ? (
+              <TeamInvitePage />
+            ) : (
+              <Navigate to="/" replace />
+            )
+          }
+        />
         <Route
           path="/leads"
           element={
