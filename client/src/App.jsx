@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import AppLayout from "./layout/AppLayout";
 import ProtectedLayout from "./components/ProtectedLayout";
 import RecruitingPage from "./pages/RecruitingPage";
-import LoginPage from "./pages/LoginPage";
+import PortalSelectPage from "./pages/PortalSelectPage";
+import RoleLoginPage from "./pages/RoleLoginPage";
 import OnboardingPage from "./pages/OnboardingPage";
 import TeamInvitePage from "./pages/TeamInvitePage";
 import RecruitDetailPage from "./pages/RecruitDetailPage";
@@ -204,11 +205,15 @@ export default function App() {
           .from("profiles")
           .select("id, email, full_name, role, manager_id")
           .eq("id", user.id)
-          .single();
+          .maybeSingle();
 
         if (profileError) {
           console.error("profile read error:", profileError);
           throw profileError;
+        }
+
+        if (!profile) {
+          throw new Error("No profile found for this user.");
         }
 
         if (!isMounted) return;
@@ -239,42 +244,40 @@ export default function App() {
     }
 
     async function boot() {
-  try {
-    const {
-      data: { session },
-      error,
-    } = await supabase.auth.getSession();
+      try {
+        const {
+          data: { session },
+          error,
+        } = await supabase.auth.getSession();
 
-    if (error) {
-      console.error("getSession error:", error);
+        if (error) {
+          console.error("getSession error:", error);
+        }
+
+        if (!isMounted) return;
+
+        if (!session) {
+          setIsAuthenticated(false);
+          setCurrentUser(null);
+          setLeads([]);
+          setTaskList([]);
+          setIsBooting(false);
+          return;
+        }
+
+        await loadUserAndData(session.user);
+      } catch (error) {
+        console.error("boot error:", error);
+
+        if (!isMounted) return;
+
+        setIsAuthenticated(false);
+        setCurrentUser(null);
+        setLeads([]);
+        setTaskList([]);
+        setIsBooting(false);
+      }
     }
-
-    if (!isMounted) return;
-
-    if (!session) {
-      setIsAuthenticated(false);
-      setCurrentUser(null);
-      setLeads([]);
-      setTaskList([]);
-      setIsBooting(false);
-      return;
-    }
-
-    console.log("SIGN IN SUCCESS, SESSION CREATED", session.user); // 👈 ADD THIS
-
-    await loadUserAndData(session.user);
-  } catch (error) {
-    console.error("boot error:", error);
-
-    if (!isMounted) return;
-
-    setIsAuthenticated(false);
-    setCurrentUser(null);
-    setLeads([]);
-    setTaskList([]);
-    setIsBooting(false);
-  }
-}
 
     const timeoutId = setTimeout(() => {
       if (!isMounted) return;
@@ -504,7 +507,19 @@ export default function App() {
 
   return (
     <Routes>
-      <Route path="/login" element={<LoginPage />} />
+      <Route path="/login" element={<PortalSelectPage />} />
+      <Route
+        path="/login/admin"
+        element={<RoleLoginPage requiredRole="admin" />}
+      />
+      <Route
+        path="/login/manager"
+        element={<RoleLoginPage requiredRole="manager" />}
+      />
+      <Route
+        path="/login/agent"
+        element={<RoleLoginPage requiredRole="agent" />}
+      />
 
       <Route
         element={
