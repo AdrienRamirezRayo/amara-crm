@@ -29,10 +29,7 @@ import IntegrationsPage from "./pages/IntegrationsPage";
 import SettingsPage from "./pages/SettingsPage";
 
 import { createLeadActivity } from "./services/activity";
-import {
-  getCurrentSession,
-  signOutUser,
-} from "./services/auth";
+import { signOutUser } from "./services/auth";
 import {
   fetchLeads,
   createLead,
@@ -40,7 +37,7 @@ import {
   deleteLead,
 } from "./services/leads";
 import { fetchTasks } from "./services/tasks";
-import { fetchMyProfile, upsertProfile } from "./services/profiles";
+import { createProfile } from "./services/profiles";
 import { supabase } from "./lib/supabase";
 import { initialLeads, tasks as initialTasks } from "./data/crmData";
 
@@ -156,135 +153,188 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [isBooting, setIsBooting] = useState(true);
 
-  useEffect(() => {
-    async function loadUserAndData(user) {
-      try {
-        const { data: profileData, error: profileError } = await fetchMyProfile(
-          user.id
-        );
+useEffect(() => {
+  let isMounted = true;
 
-        let profile = profileData;
+  async function loadAppData() {
+    try {
+      const [leadsResult, tasksResult] = await Promise.allSettled([
+        fetchLeads(),
+        fetchTasks(),
+      ]);
 
-        if (profileError && profileError.code !== "PGRST116") {
-          console.error("fetchMyProfile error:", profileError);
-        }
+      if (!isMounted) return;
 
-        if (!profile) {
-          const { data: createdProfile, error: createProfileError } =
-            await upsertProfile({
-              id: user.id,
-              email: user.email,
-              full_name:
-                user.user_metadata?.full_name ||
-                user.email?.split("@")[0] ||
-                "User",
-              role: user.user_metadata?.role || "Agent",
-            });
-
-          if (createProfileError) {
-            console.error("upsertProfile error:", createProfileError);
-          }
-
-          profile = createdProfile;
-        }
-
-        setCurrentUser({
-          id: user.id,
-          name: profile?.full_name || user.email?.split("@")[0] || "User",
-          email: user.email,
-          role: profile?.role || "Agent",
-          managerId: profile?.manager_id || null,
-        });
-
-        setIsAuthenticated(true);
-
-        const [
-          { data: dbLeads, error: leadsError },
-          { data: dbTasks, error: tasksError },
-        ] = await Promise.all([fetchLeads(), fetchTasks()]);
-
+      if (leadsResult.status === "fulfilled") {
+        const { data: dbLeads, error: leadsError } = leadsResult.value;
         if (leadsError) {
           console.error("fetchLeads error:", leadsError);
+          setLeads([]);
+        } else {
+          setLeads(Array.isArray(dbLeads) ? dbLeads.map(mapDbLeadToUi) : []);
         }
+      } else {
+        console.error("fetchLeads crashed:", leadsResult.reason);
+        setLeads([]);
+      }
 
+      if (tasksResult.status === "fulfilled") {
+        const { data: dbTasks, error: tasksError } = tasksResult.value;
         if (tasksError) {
           console.error("fetchTasks error:", tasksError);
-        }
-
-        if (Array.isArray(dbLeads)) {
-          setLeads(dbLeads.map(mapDbLeadToUi));
-        } else {
-          setLeads([]);
-        }
-
-        if (Array.isArray(dbTasks)) {
-          setTaskList(dbTasks.map(mapDbTaskToUi));
-        } else {
           setTaskList([]);
+        } else {
+          setTaskList(Array.isArray(dbTasks) ? dbTasks.map(mapDbTaskToUi) : []);
         }
-      } catch (error) {
-        console.error("loadUserAndData error:", error);
+      } else {
+        console.error("fetchTasks crashed:", tasksResult.reason);
+        setTaskList([]);
+      }
+    } catch (error) {
+      console.error("loadAppData error:", error);
+      if (isMounted) {
+        setLeads([]);
+        setTaskList([]);
+      }
+    }
+  }
 
-        setCurrentUser({
+  async function loadUserAndData(user) {
+  try {
+    const { data: profileData, error: profileError } = await supabase
+      .from("profiles")
+      .select("id, email, full_name, role, manager_id")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    let profile = profileData;
+
+    if (profileError) {
+      console.error("direct profile query error:", profileError);
+    }
+
+    if (!profile) {
+      const { data: createdProfile, error: createProfileError } =
+        await createProfile({
           id: user.id,
-          name: user.email?.split("@")[0] || "User",
           email: user.email,
-          role: "Agent",
-          managerId: null,
+          full_name:
+            user.user_metadata?.full_name ||
+            user.email?.split("@")[0] ||
+            "User",
+          role: "admin",
         });
 
-        setIsAuthenticated(true);
+      if (createProfileError) {
+        console.error("createProfile error:", createProfileError);
       }
+
+      profile = createdProfile;
     }
 
-    async function boot() {
-      try {
-        const { data: sessionData } = await getCurrentSession();
-        const session = sessionData?.session;
+    console.log("PROFILE USED BY APP:", profile);
 
-        if (!session) {
-          setIsAuthenticated(false);
-          setCurrentUser(null);
-          setIsBooting(false);
-          return;
-        }
+    if (!isMounted) return;
 
-        const user = session.user;
-        await loadUserAndData(user);
-      } catch (error) {
-        console.error("boot error:", error);
+    setCurrentUser({
+      id: user.id,
+      name: profile?.full_name || user.email?.split("@")[0] || "User",
+      email: user.email,
+      role: (profile?.role || "admin").toLowerCase(),
+      managerId: profile?.manager_id || null,
+    });
+
+    setIsAuthenticated(true);
+    setIsBooting(false);
+
+    loadAppData();
+  } catch (error) {
+    console.error("loadUserAndData error:", error);
+
+    if (!isMounted) return;
+
+    setCurrentUser({
+      id: user.id,
+      name: user.email?.split("@")[0] || "User",
+      email: user.email,
+      role: "admin",
+      managerId: null,
+    });
+
+    setIsAuthenticated(true);
+    setIsBooting(false);
+    setLeads([]);
+    setTaskList([]);
+  }
+}
+  async function boot() {
+    try {
+      const {
+        data: { session },
+        error,
+      } = await supabase.auth.getSession();
+
+      if (error) {
+        console.error("getSession error:", error);
+      }
+
+      if (!isMounted) return;
+
+      if (!session) {
         setIsAuthenticated(false);
         setCurrentUser(null);
-      } finally {
+        setLeads([]);
+        setTaskList([]);
         setIsBooting(false);
+        return;
       }
+
+      await loadUserAndData(session.user);
+    } catch (error) {
+      console.error("boot error:", error);
+
+      if (!isMounted) return;
+
+      setIsAuthenticated(false);
+      setCurrentUser(null);
+      setLeads([]);
+      setTaskList([]);
+      setIsBooting(false);
+    }
+  }
+
+  const timeoutId = setTimeout(() => {
+    if (!isMounted) return;
+    setIsBooting(false);
+  }, 4000);
+
+  boot();
+
+  const {
+    data: { subscription },
+  } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    if (!isMounted) return;
+
+    if (!session) {
+      setIsAuthenticated(false);
+      setCurrentUser(null);
+      setLeads([]);
+      setTaskList([]);
+      setIsBooting(false);
+      return;
     }
 
-    boot();
+    await loadUserAndData(session.user);
+  });
 
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        if (!session) {
-          setIsAuthenticated(false);
-          setCurrentUser(null);
-          setLeads([]);
-          setTaskList([]);
-          setIsBooting(false);
-          return;
-        }
+  return () => {
+    isMounted = false;
+    clearTimeout(timeoutId);
+    subscription.unsubscribe();
+  };
+}, []);
 
-        setIsBooting(true);
-        await loadUserAndData(session.user);
-        setIsBooting(false);
-      }
-    );
-
-    return () => {
-      authListener?.subscription?.unsubscribe();
-    };
-  }, []);
-
-  function rewardBones(amount) {
+function rewardBones(amount) {
     setDogBones((prev) => prev + amount);
   }
 
@@ -449,14 +499,14 @@ export default function App() {
   }
 
   const visibleLeads = useMemo(() => {
-    if (currentUser?.role === "Admin") return leads;
-    if (currentUser?.role === "Manager") return leads;
+    if (currentUser?.role === "admin") return leads;
+    if (currentUser?.role === "manager") return leads;
     return leads.filter((lead) => lead.ownerId === currentUser?.id);
   }, [leads, currentUser]);
 
   const visibleTasks = useMemo(() => {
-    if (currentUser?.role === "Admin") return taskList;
-    if (currentUser?.role === "Manager") return taskList;
+    if (currentUser?.role === "admin") return taskList;
+    if (currentUser?.role === "manager") return taskList;
     return taskList.filter((task) => task.ownerId === currentUser?.id);
   }, [taskList, currentUser]);
 
@@ -464,20 +514,20 @@ export default function App() {
     return calculateStats(visibleLeads, visibleTasks, dogBones);
   }, [visibleLeads, visibleTasks, dogBones]);
 
-  if (isBooting) {
-    return (
-      <div
-        style={{
-          minHeight: "100vh",
-          display: "grid",
-          placeItems: "center",
-          color: "white",
-        }}
-      >
-        Loading AMARA CRM...
-      </div>
-    );
-  }
+if (isBooting && !currentUser && !isAuthenticated) {
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "grid",
+        placeItems: "center",
+        color: "white",
+      }}
+    >
+      Loading AMARA CRM...
+    </div>
+  );
+}
 
   return (
     <Routes>
@@ -515,7 +565,7 @@ export default function App() {
         <Route
           path="/onboarding"
           element={
-            canAccess(["Admin"]) ? (
+            canAccess(["admin"]) ? (
               <OnboardingPage />
             ) : (
               <Navigate to="/" replace />
@@ -525,7 +575,7 @@ export default function App() {
         <Route
           path="/team-invite"
           element={
-            canAccess(["Admin", "Manager", "Agent"]) ? (
+            canAccess(["admin", "manager", "agent"]) ? (
               <TeamInvitePage />
             ) : (
               <Navigate to="/" replace />
@@ -570,7 +620,7 @@ export default function App() {
         <Route
           path="/manager"
           element={
-            canAccess(["Admin", "Manager"]) ? (
+            canAccess(["admin", "manager"]) ? (
               <ManagerDashboardPage
                 leads={visibleLeads}
                 tasks={visibleTasks}
@@ -584,7 +634,7 @@ export default function App() {
         <Route
           path="/agents"
           element={
-            canAccess(["Admin", "Manager"]) ? (
+            canAccess(["admin", "manager"]) ? (
               <AgentsPage />
             ) : (
               <Navigate to="/" replace />
@@ -594,7 +644,7 @@ export default function App() {
         <Route
           path="/agents/:id"
           element={
-            canAccess(["Admin", "Manager"]) ? (
+            canAccess(["admin", "manager"]) ? (
               <AgentDetailPage />
             ) : (
               <Navigate to="/" replace />
@@ -605,7 +655,7 @@ export default function App() {
         <Route
           path="/audit"
           element={
-            canAccess(["Admin"]) ? (
+            canAccess(["admin"]) ? (
               <AuditCenterPage />
             ) : (
               <Navigate to="/" replace />
@@ -615,7 +665,7 @@ export default function App() {
         <Route
           path="/reports"
           element={
-            canAccess(["Admin", "Manager"]) ? (
+            canAccess(["admin", "manager"]) ? (
               <ReportsPage />
             ) : (
               <Navigate to="/" replace />
@@ -625,7 +675,7 @@ export default function App() {
         <Route
           path="/integrations"
           element={
-            canAccess(["Admin"]) ? (
+            canAccess(["admin"]) ? (
               <IntegrationsPage />
             ) : (
               <Navigate to="/" replace />
@@ -635,7 +685,7 @@ export default function App() {
         <Route
           path="/settings"
           element={
-            canAccess(["Admin"]) ? (
+            canAccess(["admin"]) ? (
               <SettingsPage />
             ) : (
               <Navigate to="/" replace />
@@ -644,10 +694,10 @@ export default function App() {
         />
       </Route>
 
-      <Route
-        path="*"
-        element={<Navigate to={isAuthenticated ? "/" : "/login"} replace />}
-      />
-    </Routes>
-  );
-}
+        <Route
+          path="*"
+          element={<Navigate to={isAuthenticated ? "/" : "/login"} replace />}
+        />
+      </Routes>
+    );
+  }

@@ -44,7 +44,14 @@ export default function AppLayout({
   performanceStats,
 }) {
   const location = useLocation();
-  const role = currentUser?.role || "Agent";
+  const role = (currentUser?.role || "admin").toLowerCase();
+
+  const roleLabel =
+    role === "admin"
+      ? "admin"
+      : role === "manager"
+      ? "manager"
+      : "agent";
 
   const pageTitles = {
     "/": {
@@ -53,7 +60,8 @@ export default function AppLayout({
     },
     "/recruiting": {
       title: "Recruiting Center",
-      subtitle: "Submit agent and recruit info, track pipeline entries, and grow the team.",
+      subtitle:
+        "Submit agent and recruit info, track pipeline entries, and grow the team.",
     },
     "/onboarding": {
       title: "Onboarding Center",
@@ -216,7 +224,7 @@ export default function AppLayout({
           </div>
         </div>
 
-        {(role === "Admin" || role === "Manager") && (
+        {(role === "admin" || role === "manager") && (
           <div className="nav-section">
             <div className="nav-label">Management</div>
             <div className="nav-list">
@@ -238,7 +246,7 @@ export default function AppLayout({
           </div>
         )}
 
-        {role === "Admin" && (
+        {role === "admin" && (
           <div className="nav-section">
             <div className="nav-label">System</div>
             <div className="nav-list">
@@ -274,7 +282,7 @@ export default function AppLayout({
               </div>
 
               <div className="section-spacing">
-                <span className="tag green">{role} Mode</span>
+                <span className="tag green">{roleLabel} Mode</span>
               </div>
             </div>
           </div>
@@ -320,7 +328,7 @@ export default function AppLayout({
             <div className="glow-pill">🦴 {dogBones?.toLocaleString() || 0} Bones</div>
 
             <div className="glow-pill">
-              {currentUser?.name || "User"} • {currentUser?.role || "Member"}
+              {currentUser?.name || "User"} • {roleLabel}
             </div>
 
             <button className="primary-btn" onClick={onOpenLeadModal}>
