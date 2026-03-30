@@ -44,13 +44,13 @@ export default function AppLayout({
   performanceStats,
 }) {
   const location = useLocation();
-  const role = (currentUser?.role || "admin").toLowerCase();
+  const role = (currentUser?.role || "agent").toLowerCase();
 
   const roleLabel =
-    role === "admin"
-      ? "admin"
-      : role === "manager"
-      ? "manager"
+    role === "agent"
+      ? "agent"
+      : role === "agent"
+      ? "agent"
       : "agent";
 
   const pageTitles = {
@@ -73,19 +73,23 @@ export default function AppLayout({
     },
     "/audit": {
       title: "Audit Center",
-      subtitle: "Track actions, review events, and maintain operational visibility.",
+      subtitle:
+        "Track actions, review events, and maintain operational visibility.",
     },
     "/reports": {
       title: "Reports Center",
-      subtitle: "View production metrics, conversion insights, and export-ready summaries.",
+      subtitle:
+        "View production metrics, conversion insights, and export-ready summaries.",
     },
     "/integrations": {
       title: "Integrations Hub",
-      subtitle: "Manage platform connections, deployment targets, and future AI modules.",
+      subtitle:
+        "Manage platform connections, deployment targets, and future AI modules.",
     },
     "/settings": {
       title: "Agency Settings",
-      subtitle: "Control branding, workflow rules, compliance settings, and system behavior.",
+      subtitle:
+        "Control branding, workflow rules, compliance settings, and system behavior.",
     },
     "/notifications": {
       title: "Notifications Center",
@@ -97,15 +101,18 @@ export default function AppLayout({
     },
     "/manager": {
       title: "Manager Dashboard",
-      subtitle: "Monitor agency performance, agent rankings, and operational priorities.",
+      subtitle:
+        "Monitor agency performance, agent rankings, and operational priorities.",
     },
     "/tasks": {
       title: "Task Center",
-      subtitle: "Track follow-ups, priorities, and daily execution for every agent.",
+      subtitle:
+        "Track follow-ups, priorities, and daily execution for every agent.",
     },
     "/sales-coach": {
       title: "AI Sales Coach",
-      subtitle: "Live prompting, transcription, translation, and guided sales scripting.",
+      subtitle:
+        "Live prompting, transcription, translation, and guided sales scripting.",
     },
     "/leaderboard": {
       title: "Agency Leaderboard",
@@ -134,17 +141,20 @@ export default function AppLayout({
     (location.pathname.startsWith("/agents/")
       ? {
           title: "Agent Detail",
-          subtitle: "Monitor individual agent performance, leads, and tasks.",
+          subtitle:
+            "Monitor individual agent performance, leads, and tasks.",
         }
       : location.pathname.startsWith("/leads/")
       ? {
           title: "Lead Profile",
-          subtitle: "View full client details, notes, related tasks, and activity.",
+          subtitle:
+            "View full client details, notes, related tasks, and activity.",
         }
       : location.pathname.startsWith("/recruiting/")
       ? {
           title: "Recruit Detail",
-          subtitle: "View recruiting profile, notes, checklist progress, and pipeline status.",
+          subtitle:
+            "View recruiting profile, notes, checklist progress, and pipeline status.",
         }
       : {
           title: "AMARA CRM",
@@ -164,7 +174,9 @@ export default function AppLayout({
             <AmaraLogo size={62} />
             <div>
               <div className="brand-title">AMARA CRM</div>
-              <div className="brand-subtitle">Neural Sales Operating System</div>
+              <div className="brand-subtitle">
+                Neural Sales Operating System
+              </div>
             </div>
           </div>
         </motion.div>
@@ -172,37 +184,72 @@ export default function AppLayout({
         <div className="nav-section">
           <div className="nav-label">Sales</div>
           <div className="nav-list">
-            <NavLink to="/" className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}>
+            <NavLink
+              to="/"
+              className={({ isActive }) =>
+                `nav-link ${isActive ? "active" : ""}`
+              }
+            >
               <LayoutDashboard size={18} />
               <span>Dashboard</span>
             </NavLink>
 
-            <NavLink to="/pipeline" className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}>
+            <NavLink
+              to="/pipeline"
+              className={({ isActive }) =>
+                `nav-link ${isActive ? "active" : ""}`
+              }
+            >
               <Columns size={18} />
               <span>Pipeline</span>
             </NavLink>
 
-            <NavLink to="/sales-coach" className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}>
+            <NavLink
+              to="/sales-coach"
+              className={({ isActive }) =>
+                `nav-link ${isActive ? "active" : ""}`
+              }
+            >
               <Brain size={18} />
               <span>Sales Coach</span>
             </NavLink>
 
-            <NavLink to="/leads" className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}>
+            <NavLink
+              to="/leads"
+              className={({ isActive }) =>
+                `nav-link ${isActive ? "active" : ""}`
+              }
+            >
               <Users size={18} />
               <span>Leads</span>
             </NavLink>
 
-            <NavLink to="/appointments" className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}>
+            <NavLink
+              to="/appointments"
+              className={({ isActive }) =>
+                `nav-link ${isActive ? "active" : ""}`
+              }
+            >
               <CalendarDays size={18} />
               <span>Appointments</span>
             </NavLink>
 
-            <NavLink to="/tasks" className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}>
+            <NavLink
+              to="/tasks"
+              className={({ isActive }) =>
+                `nav-link ${isActive ? "active" : ""}`
+              }
+            >
               <CheckSquare size={18} />
               <span>Tasks</span>
             </NavLink>
 
-            <NavLink to="/commissions" className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}>
+            <NavLink
+              to="/commissions"
+              className={({ isActive }) =>
+                `nav-link ${isActive ? "active" : ""}`
+              }
+            >
               <DollarSign size={18} />
               <span>Commissions</span>
             </NavLink>
@@ -212,15 +259,27 @@ export default function AppLayout({
         <div className="nav-section">
           <div className="nav-label">Recruiting</div>
           <div className="nav-list">
-            <NavLink to="/recruiting" className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}>
+            <NavLink
+              to="/recruiting"
+              className={({ isActive }) =>
+                `nav-link ${isActive ? "active" : ""}`
+              }
+            >
               <UsersRound size={18} />
               <span>Recruiting</span>
             </NavLink>
 
-            <NavLink to="/team-invite" className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}>
-              <UserPlus size={18} />
-              <span>Team Invite</span>
-            </NavLink>
+            {(role === "admin" || role === "manager") && (
+              <NavLink
+                to="/team-invite"
+                className={({ isActive }) =>
+                  `nav-link ${isActive ? "active" : ""}`
+                }
+              >
+                <UserPlus size={18} />
+                <span>Team Invite</span>
+              </NavLink>
+            )}
           </div>
         </div>
 
@@ -228,17 +287,42 @@ export default function AppLayout({
           <div className="nav-section">
             <div className="nav-label">Management</div>
             <div className="nav-list">
-              <NavLink to="/leaderboard" className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}>
+              <NavLink
+                to="/manager"
+                className={({ isActive }) =>
+                  `nav-link ${isActive ? "active" : ""}`
+                }
+              >
+                <Trophy size={18} />
+                <span>Manager Dashboard</span>
+              </NavLink>
+
+              <NavLink
+                to="/leaderboard"
+                className={({ isActive }) =>
+                  `nav-link ${isActive ? "active" : ""}`
+                }
+              >
                 <Trophy size={18} />
                 <span>Leaderboard</span>
               </NavLink>
 
-              <NavLink to="/agents" className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}>
+              <NavLink
+                to="/agents"
+                className={({ isActive }) =>
+                  `nav-link ${isActive ? "active" : ""}`
+                }
+              >
                 <UserCircle2 size={18} />
                 <span>Agents</span>
               </NavLink>
 
-              <NavLink to="/reports" className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}>
+              <NavLink
+                to="/reports"
+                className={({ isActive }) =>
+                  `nav-link ${isActive ? "active" : ""}`
+                }
+              >
                 <BarChart3 size={18} />
                 <span>Reports</span>
               </NavLink>
@@ -250,17 +334,32 @@ export default function AppLayout({
           <div className="nav-section">
             <div className="nav-label">System</div>
             <div className="nav-list">
-              <NavLink to="/notifications" className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}>
+              <NavLink
+                to="/notifications"
+                className={({ isActive }) =>
+                  `nav-link ${isActive ? "active" : ""}`
+                }
+              >
                 <Bell size={18} />
                 <span>Notifications</span>
               </NavLink>
 
-              <NavLink to="/integrations" className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}>
+              <NavLink
+                to="/integrations"
+                className={({ isActive }) =>
+                  `nav-link ${isActive ? "active" : ""}`
+                }
+              >
                 <PlugZap size={18} />
                 <span>Integrations</span>
               </NavLink>
 
-              <NavLink to="/settings" className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}>
+              <NavLink
+                to="/settings"
+                className={({ isActive }) =>
+                  `nav-link ${isActive ? "active" : ""}`
+                }
+              >
                 <Settings2 size={18} />
                 <span>Settings</span>
               </NavLink>
@@ -278,7 +377,8 @@ export default function AppLayout({
               </div>
 
               <div className="pipeline-meta" style={{ marginTop: 12 }}>
-                Lead engine active. Conversion stack synced. Performance economy live.
+                Lead engine active. Conversion stack synced. Performance economy
+                live.
               </div>
 
               <div className="section-spacing">
@@ -316,19 +416,25 @@ export default function AppLayout({
 
               <div>
                 <div className="stat-label">Close %</div>
-                <div className="stat-value">{performanceStats?.closeRate || 0}%</div>
+                <div className="stat-value">
+                  {performanceStats?.closeRate || 0}%
+                </div>
               </div>
 
               <div>
                 <div className="stat-label">Activity</div>
-                <div className="stat-value">{performanceStats?.callsToday || 0}</div>
+                <div className="stat-value">
+                  {performanceStats?.callsToday || 0}
+                </div>
               </div>
             </div>
 
-            <div className="glow-pill">🦴 {dogBones?.toLocaleString() || 0} Bones</div>
+            <div className="glow-pill">
+              🦴 {dogBones?.toLocaleString() || 0} Bones
+            </div>
 
             <div className="glow-pill">
-              {currentUser?.name || "User"} • {roleLabel}
+              {currentUser?.name || "User"} • RAW:{currentUser?.role} • {roleLabel}
             </div>
 
             <button className="primary-btn" onClick={onOpenLeadModal}>
@@ -336,7 +442,14 @@ export default function AppLayout({
             </button>
 
             <button className="small-btn" onClick={onLogout}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "center" }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  justifyContent: "center",
+                }}
+              >
                 <LogOut size={15} />
                 Logout
               </div>

@@ -153,131 +153,167 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [isBooting, setIsBooting] = useState(true);
 
-useEffect(() => {
-  let isMounted = true;
+  useEffect(() => {
+    let isMounted = true;
 
-  async function loadAppData() {
-    try {
-      const [leadsResult, tasksResult] = await Promise.allSettled([
-        fetchLeads(),
-        fetchTasks(),
-      ]);
+    async function loadAppData() {
+      try {
+        const [leadsResult, tasksResult] = await Promise.allSettled([
+          fetchLeads(),
+          fetchTasks(),
+        ]);
 
-      if (!isMounted) return;
+        if (!isMounted) return;
 
-      if (leadsResult.status === "fulfilled") {
-        const { data: dbLeads, error: leadsError } = leadsResult.value;
-        if (leadsError) {
-          console.error("fetchLeads error:", leadsError);
+        if (leadsResult.status === "fulfilled") {
+          const { data: dbLeads, error: leadsError } = leadsResult.value;
+          if (leadsError) {
+            console.error("fetchLeads error:", leadsError);
+            setLeads([]);
+          } else {
+            setLeads(Array.isArray(dbLeads) ? dbLeads.map(mapDbLeadToUi) : []);
+          }
+        } else {
+          console.error("fetchLeads crashed:", leadsResult.reason);
           setLeads([]);
-        } else {
-          setLeads(Array.isArray(dbLeads) ? dbLeads.map(mapDbLeadToUi) : []);
         }
-      } else {
-        console.error("fetchLeads crashed:", leadsResult.reason);
-        setLeads([]);
-      }
 
-      if (tasksResult.status === "fulfilled") {
-        const { data: dbTasks, error: tasksError } = tasksResult.value;
-        if (tasksError) {
-          console.error("fetchTasks error:", tasksError);
+        if (tasksResult.status === "fulfilled") {
+          const { data: dbTasks, error: tasksError } = tasksResult.value;
+          if (tasksError) {
+            console.error("fetchTasks error:", tasksError);
+            setTaskList([]);
+          } else {
+            setTaskList(Array.isArray(dbTasks) ? dbTasks.map(mapDbTaskToUi) : []);
+          }
+        } else {
+          console.error("fetchTasks crashed:", tasksResult.reason);
           setTaskList([]);
-        } else {
-          setTaskList(Array.isArray(dbTasks) ? dbTasks.map(mapDbTaskToUi) : []);
         }
-      } else {
-        console.error("fetchTasks crashed:", tasksResult.reason);
-        setTaskList([]);
-      }
-    } catch (error) {
-      console.error("loadAppData error:", error);
-      if (isMounted) {
-        setLeads([]);
-        setTaskList([]);
+      } catch (error) {
+        console.error("loadAppData error:", error);
+        if (isMounted) {
+          setLeads([]);
+          setTaskList([]);
+        }
       }
     }
-  }
 
-  async function loadUserAndData(user) {
-  try {
-    const { data: profileData, error: profileError } = await supabase
-      .from("profiles")
-      .select("id, email, full_name, role, manager_id")
-      .eq("id", user.id)
-      .maybeSingle();
+    async function loadUserAndData(user) {
+      try {
+        const { data: profileData, error: profileError } = await supabase
+          .from("profiles")
+          .select("id, email, full_name, role, manager_id")
+          .eq("id", user.id)
+          .maybeSingle();
 
-    let profile = profileData;
+        let profile = profileData;
 
-    if (profileError) {
-      console.error("direct profile query error:", profileError);
-    }
+        if (profileError) {
+          console.error("direct profile query error:", profileError);
+        }
 
-    if (!profile) {
-      const { data: createdProfile, error: createProfileError } =
-        await createProfile({
+        if (!profile) {
+          const { data: createdProfile, error: createProfileError } =
+            await createProfile({
+              id: user.id,
+              email: user.email,
+              full_name:
+                user.user_metadata?.full_name ||
+                user.email?.split("@")[0] ||
+                "User",
+              role: "agent",
+            });
+
+          if (createProfileError) {
+            console.error("createProfile error:", createProfileError);
+          }
+
+          profile = createdProfile;
+        }
+
+        console.log("PROFILE USED BY APP:", profile);
+
+        if (!isMounted) return;
+
+        setCurrentUser({
           id: user.id,
+          name: profile?.full_name || user.email?.split("@")[0] || "User",
           email: user.email,
-          full_name:
-            user.user_metadata?.full_name ||
-            user.email?.split("@")[0] ||
-            "User",
-          role: "admin",
+          role: (profile?.role || "agent").toLowerCase(),
+          managerId: profile?.manager_id || null,
         });
 
-      if (createProfileError) {
-        console.error("createProfile error:", createProfileError);
-      }
+        setIsAuthenticated(true);
+        setIsBooting(false);
 
-      profile = createdProfile;
+        loadAppData();
+      } catch (error) {
+        console.error("loadUserAndData error:", error);
+
+        if (!isMounted) return;
+
+        setCurrentUser({
+          id: user.id,
+          name: user.email?.split("@")[0] || "User",
+          email: user.email,
+          role: "agent",
+          managerId: null,
+        });
+
+        setIsAuthenticated(true);
+        setIsBooting(false);
+        setLeads([]);
+        setTaskList([]);
+      }
     }
 
-    console.log("PROFILE USED BY APP:", profile);
+    async function boot() {
+      try {
+        const {
+          data: { session },
+          error,
+        } = await supabase.auth.getSession();
 
-    if (!isMounted) return;
+        if (error) {
+          console.error("getSession error:", error);
+        }
 
-    setCurrentUser({
-      id: user.id,
-      name: profile?.full_name || user.email?.split("@")[0] || "User",
-      email: user.email,
-      role: (profile?.role || "admin").toLowerCase(),
-      managerId: profile?.manager_id || null,
-    });
+        if (!isMounted) return;
 
-    setIsAuthenticated(true);
-    setIsBooting(false);
+        if (!session) {
+          setIsAuthenticated(false);
+          setCurrentUser(null);
+          setLeads([]);
+          setTaskList([]);
+          setIsBooting(false);
+          return;
+        }
 
-    loadAppData();
-  } catch (error) {
-    console.error("loadUserAndData error:", error);
+        await loadUserAndData(session.user);
+      } catch (error) {
+        console.error("boot error:", error);
 
-    if (!isMounted) return;
+        if (!isMounted) return;
 
-    setCurrentUser({
-      id: user.id,
-      name: user.email?.split("@")[0] || "User",
-      email: user.email,
-      role: "admin",
-      managerId: null,
-    });
-
-    setIsAuthenticated(true);
-    setIsBooting(false);
-    setLeads([]);
-    setTaskList([]);
-  }
-}
-  async function boot() {
-    try {
-      const {
-        data: { session },
-        error,
-      } = await supabase.auth.getSession();
-
-      if (error) {
-        console.error("getSession error:", error);
+        setIsAuthenticated(false);
+        setCurrentUser(null);
+        setLeads([]);
+        setTaskList([]);
+        setIsBooting(false);
       }
+    }
 
+    const timeoutId = setTimeout(() => {
+      if (!isMounted) return;
+      setIsBooting(false);
+    }, 4000);
+
+    boot();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (!isMounted) return;
 
       if (!session) {
@@ -290,51 +326,16 @@ useEffect(() => {
       }
 
       await loadUserAndData(session.user);
-    } catch (error) {
-      console.error("boot error:", error);
+    });
 
-      if (!isMounted) return;
+    return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
+      subscription.unsubscribe();
+    };
+  }, []);
 
-      setIsAuthenticated(false);
-      setCurrentUser(null);
-      setLeads([]);
-      setTaskList([]);
-      setIsBooting(false);
-    }
-  }
-
-  const timeoutId = setTimeout(() => {
-    if (!isMounted) return;
-    setIsBooting(false);
-  }, 4000);
-
-  boot();
-
-  const {
-    data: { subscription },
-  } = supabase.auth.onAuthStateChange(async (_event, session) => {
-    if (!isMounted) return;
-
-    if (!session) {
-      setIsAuthenticated(false);
-      setCurrentUser(null);
-      setLeads([]);
-      setTaskList([]);
-      setIsBooting(false);
-      return;
-    }
-
-    await loadUserAndData(session.user);
-  });
-
-  return () => {
-    isMounted = false;
-    clearTimeout(timeoutId);
-    subscription.unsubscribe();
-  };
-}, []);
-
-function rewardBones(amount) {
+  function rewardBones(amount) {
     setDogBones((prev) => prev + amount);
   }
 
@@ -514,20 +515,20 @@ function rewardBones(amount) {
     return calculateStats(visibleLeads, visibleTasks, dogBones);
   }, [visibleLeads, visibleTasks, dogBones]);
 
-if (isBooting && !currentUser && !isAuthenticated) {
-  return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "grid",
-        placeItems: "center",
-        color: "white",
-      }}
-    >
-      Loading AMARA CRM...
-    </div>
-  );
-}
+  if (isBooting && !currentUser && !isAuthenticated) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          display: "grid",
+          placeItems: "center",
+          color: "white",
+        }}
+      >
+        Loading AMARA CRM...
+      </div>
+    );
+  }
 
   return (
     <Routes>
@@ -573,15 +574,15 @@ if (isBooting && !currentUser && !isAuthenticated) {
           }
         />
         <Route
-          path="/team-invite"
-          element={
-            canAccess(["admin", "manager", "agent"]) ? (
-              <TeamInvitePage />
-            ) : (
-              <Navigate to="/" replace />
-            )
-          }
-        />
+  path="/team-invite"
+  element={
+    canAccess(["admin", "manager"]) ? (
+      <TeamInvitePage />
+    ) : (
+      <Navigate to="/" replace />
+    )
+  }
+/>
         <Route
           path="/leads"
           element={
@@ -694,10 +695,10 @@ if (isBooting && !currentUser && !isAuthenticated) {
         />
       </Route>
 
-        <Route
-          path="*"
-          element={<Navigate to={isAuthenticated ? "/" : "/login"} replace />}
-        />
-      </Routes>
-    );
-  }
+      <Route
+        path="*"
+        element={<Navigate to={isAuthenticated ? "/" : "/login"} replace />}
+      />
+    </Routes>
+  );
+}
