@@ -201,70 +201,16 @@ export default function App() {
 
    async function loadUserAndData(user) {
   try {
-    // 1) Try exact match by auth user id
-    const { data: profileById, error: profileByIdError } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("id, email, full_name, role, manager_id")
       .eq("id", user.id)
-      .maybeSingle();
+      .single();
 
-    if (profileByIdError) {
-      console.error("profileById error:", profileByIdError);
+    if (profileError) {
+      console.error("profile read error:", profileError);
+      throw profileError;
     }
-
-    let profile = profileById;
-
-    // 2) If not found by id, try matching by email
-    if (!profile && user.email) {
-      const { data: profileByEmail, error: profileByEmailError } = await supabase
-        .from("profiles")
-        .select("id, email, full_name, role, manager_id")
-        .eq("email", user.email)
-        .maybeSingle();
-
-      if (profileByEmailError) {
-        console.error("profileByEmail error:", profileByEmailError);
-      }
-
-      // 3) If found by email, align that row to the current auth user id
-      if (profileByEmail) {
-        const { data: updatedProfile, error: updateProfileError } = await supabase
-          .from("profiles")
-          .update({ id: user.id })
-          .eq("email", user.email)
-          .select("id, email, full_name, role, manager_id")
-          .single();
-
-        if (updateProfileError) {
-          console.error("updateProfileError:", updateProfileError);
-          profile = profileByEmail;
-        } else {
-          profile = updatedProfile;
-        }
-      }
-    }
-
-    // 4) If still nothing exists, create a brand new default profile
-    if (!profile) {
-      const { data: createdProfile, error: createProfileError } =
-        await createProfile({
-          id: user.id,
-          email: user.email,
-          full_name:
-            user.user_metadata?.full_name ||
-            user.email?.split("@")[0] ||
-            "User",
-          role: "agent",
-        });
-
-      if (createProfileError) {
-        console.error("createProfile error:", createProfileError);
-      }
-
-      profile = createdProfile;
-    }
-
-    console.log("PROFILE USED BY APP:", profile);
 
     if (!isMounted) return;
 
@@ -272,7 +218,7 @@ export default function App() {
       id: user.id,
       name: profile?.full_name || user.email?.split("@")[0] || "User",
       email: user.email,
-      role: (profile?.role || "agent").toLowerCase(),
+      role: String(profile?.role || "").toLowerCase(),
       managerId: profile?.manager_id || null,
     });
 
@@ -285,18 +231,11 @@ export default function App() {
 
     if (!isMounted) return;
 
-    setCurrentUser({
-      id: user.id,
-      name: user.email?.split("@")[0] || "User",
-      email: user.email,
-      role: "agent",
-      managerId: null,
-    });
-
-    setIsAuthenticated(true);
-    setIsBooting(false);
+    setIsAuthenticated(false);
+    setCurrentUser(null);
     setLeads([]);
     setTaskList([]);
+    setIsBooting(false);
   }
 }
 
