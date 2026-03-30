@@ -434,7 +434,7 @@ export default function AppLayout({
             </div>
 
             <div className="glow-pill">
-              {currentUser?.name || "User"} • RAW:{currentUser?.role} • {roleLabel}
+              {currentUser?.name || "User"} • {roleLabel}
             </div>
 
             <button className="primary-btn" onClick={onOpenLeadModal}>
