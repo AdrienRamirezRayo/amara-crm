@@ -199,74 +199,106 @@ export default function App() {
       }
     }
 
-    async function loadUserAndData(user) {
-      try {
-        const { data: profileData, error: profileError } = await supabase
+   async function loadUserAndData(user) {
+  try {
+    // 1) Try exact match by auth user id
+    const { data: profileById, error: profileByIdError } = await supabase
+      .from("profiles")
+      .select("id, email, full_name, role, manager_id")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (profileByIdError) {
+      console.error("profileById error:", profileByIdError);
+    }
+
+    let profile = profileById;
+
+    // 2) If not found by id, try matching by email
+    if (!profile && user.email) {
+      const { data: profileByEmail, error: profileByEmailError } = await supabase
+        .from("profiles")
+        .select("id, email, full_name, role, manager_id")
+        .eq("email", user.email)
+        .maybeSingle();
+
+      if (profileByEmailError) {
+        console.error("profileByEmail error:", profileByEmailError);
+      }
+
+      // 3) If found by email, align that row to the current auth user id
+      if (profileByEmail) {
+        const { data: updatedProfile, error: updateProfileError } = await supabase
           .from("profiles")
+          .update({ id: user.id })
+          .eq("email", user.email)
           .select("id, email, full_name, role, manager_id")
-          .eq("id", user.id)
-          .maybeSingle();
+          .single();
 
-        let profile = profileData;
-
-        if (profileError) {
-          console.error("direct profile query error:", profileError);
+        if (updateProfileError) {
+          console.error("updateProfileError:", updateProfileError);
+          profile = profileByEmail;
+        } else {
+          profile = updatedProfile;
         }
-
-        if (!profile) {
-          const { data: createdProfile, error: createProfileError } =
-            await createProfile({
-              id: user.id,
-              email: user.email,
-              full_name:
-                user.user_metadata?.full_name ||
-                user.email?.split("@")[0] ||
-                "User",
-              role: "agent",
-            });
-
-          if (createProfileError) {
-            console.error("createProfile error:", createProfileError);
-          }
-
-          profile = createdProfile;
-        }
-
-        console.log("PROFILE USED BY APP:", profile);
-
-        if (!isMounted) return;
-
-        setCurrentUser({
-          id: user.id,
-          name: profile?.full_name || user.email?.split("@")[0] || "User",
-          email: user.email,
-          role: (profile?.role || "agent").toLowerCase(),
-          managerId: profile?.manager_id || null,
-        });
-
-        setIsAuthenticated(true);
-        setIsBooting(false);
-
-        loadAppData();
-      } catch (error) {
-        console.error("loadUserAndData error:", error);
-
-        if (!isMounted) return;
-
-        setCurrentUser({
-          id: user.id,
-          name: user.email?.split("@")[0] || "User",
-          email: user.email,
-          role: "agent",
-          managerId: null,
-        });
-
-        setIsAuthenticated(true);
-        setIsBooting(false);
-        setLeads([]);
-        setTaskList([]);
       }
     }
+
+    // 4) If still nothing exists, create a brand new default profile
+    if (!profile) {
+      const { data: createdProfile, error: createProfileError } =
+        await createProfile({
+          id: user.id,
+          email: user.email,
+          full_name:
+            user.user_metadata?.full_name ||
+            user.email?.split("@")[0] ||
+            "User",
+          role: "agent",
+        });
+
+      if (createProfileError) {
+        console.error("createProfile error:", createProfileError);
+      }
+
+      profile = createdProfile;
+    }
+
+    console.log("PROFILE USED BY APP:", profile);
+
+    if (!isMounted) return;
+
+    setCurrentUser({
+      id: user.id,
+      name: profile?.full_name || user.email?.split("@")[0] || "User",
+      email: user.email,
+      role: (profile?.role || "agent").toLowerCase(),
+      managerId: profile?.manager_id || null,
+    });
+
+    setIsAuthenticated(true);
+    setIsBooting(false);
+
+    loadAppData();
+  } catch (error) {
+    console.error("loadUserAndData error:", error);
+
+    if (!isMounted) return;
+
+    setCurrentUser({
+      id: user.id,
+      name: user.email?.split("@")[0] || "User",
+      email: user.email,
+      role: "agent",
+      managerId: null,
+    });
+
+    setIsAuthenticated(true);
+    setIsBooting(false);
+    setLeads([]);
+    setTaskList([]);
+  }
+}
 
     async function boot() {
       try {
